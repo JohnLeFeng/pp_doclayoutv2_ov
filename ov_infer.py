@@ -17,7 +17,7 @@ def preprocess_image_doclayout(image, target_input_size=(800, 800)):
 
     rgb_image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
     resized = cv2.resize(rgb_image, (target_w, target_h), interpolation=cv2.INTER_CUBIC)
-    input_blob = resized.astype(np.float32) / 255.0
+    input_blob = resized.astype(np.float32)
     input_blob = input_blob.transpose(2, 0, 1)[np.newaxis, ...]
 
     return input_blob, scale_h, scale_w
@@ -572,6 +572,13 @@ def paddle_ov_doclayout(model_path, image_path, output_dir, device="GPU", thresh
     # 加载模型（.xml 文件会自动找到对应的 .bin 文件）
     model = core.read_model(model_path)
     
+    # Merge preprocessing into model
+    prep = ov.preprocess.PrePostProcessor(model)
+    prep.input("image").tensor().set_layout(ov.Layout("NCHW"))
+    prep.input("image").preprocess().scale([255, 255, 255])
+
+    model = prep.build()
+
     # 编译模型
     compiled_model = core.compile_model(model, device)
     
