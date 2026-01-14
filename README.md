@@ -11,6 +11,8 @@ This project provides a complete implementation for running PP-DocLayoutV2 docum
 - ✅ Complete OpenVINO IR model inference implementation
 - ✅ Fully consistent with PaddleOCR preprocessing and post-processing logic
 - ✅ Support for multiple inference devices: CPU, GPU, NPU, AUTO
+- ✅ **Automatic model download from ModelScope** (no manual download required)
+- ✅ Support for multiple model precisions: FP16, FP32, combined models
 - ✅ Command-line parameterization for easy integration and use
 - ✅ Automatic saving of detection results (JSON and visualization images)
 - ✅ Support for 25 types of document layout element detection
@@ -21,17 +23,64 @@ This project provides a complete implementation for running PP-DocLayoutV2 docum
 pip install -r requirements.txt
 ```
 
+**Note:** For automatic model download feature, ensure `modelscope` is installed:
+```bash
+pip install modelscope
+```
+
 ## 📥 Model Download
 
-The OpenVINO IR model files can be downloaded from ModelScope:
+### Automatic Download (Recommended)
+
+The script supports automatic model download from ModelScope. When no model path is specified, the model will be automatically downloaded from ModelScope, and the specific model variant will be selected based on the `--precision` parameter:
+
+```bash
+# Auto-download FP32 model (default)
+python ov_infer.py --image_path layout.jpg
+
+# Auto-download FP16 model (faster, lower memory)
+python ov_infer.py --image_path layout.jpg --precision fp16
+
+# Auto-download combined FP32 model
+python ov_infer.py --image_path layout.jpg --precision combined_fp32
+```
+
+**Note:** Automatic download requires `modelscope` package. Install with: `pip install modelscope`
+
+### Manual Download
+
+If you prefer to download manually, the OpenVINO IR model files are available on ModelScope:
 
 **Model Location:** [PP-DocLayoutV2-ov on ModelScope](https://www.modelscope.cn/models/zhaohb/PP-DocLayoutV2-ov/summary)
 
-After downloading, get model files (`.xml` and `.bin`) and specify the path to the `.xml` file using the `--model_path` parameter.
+After downloading, specify the path to the `.xml` file using the `--model_path` parameter.
+
+### Available Model Precisions
+
+The repository provides multiple model variants:
+
+- **FP32** (`pp_doclayoutv2_f32.xml`): Full precision, highest accuracy (default)
+- **FP16** (`pp_doclayoutv2_f16.xml`): Half precision, faster inference, lower memory usage
+- **Combined FP32** (`pp_doclayoutv2_f32_combined.xml`): FP32 model with merged batch size and boxes nodes
+- **Combined FP16** (`pp_doclayoutv2_f16_combined.xml`): FP16 model with merged batch size and boxes nodes
+
+Use the `--precision` parameter to select the desired model variant.
 
 ## 🚀 Quick Start
 
-### Basic Usage
+### Basic Usage (Auto-download Model)
+
+```bash
+# Simplest usage - automatically downloads FP32 model
+python ov_infer.py --image_path layout.jpg
+
+# Auto-download with custom output directory
+python ov_infer.py \
+    --image_path layout.jpg \
+    --output_dir ./output
+```
+
+### Using Local Model File
 
 ```bash
 python ov_infer.py \
@@ -48,7 +97,24 @@ python ov_infer.py \
     --image_path layout.jpg \
     --output_dir ./output_ov \
     --device GPU \
-    --threshold 0.5
+    --threshold 0.5 \
+    --precision fp32 \
+    --cache_dir ./models_cache
+```
+
+### Using Different Model Precisions
+
+```bash
+# Use FP16 model for faster inference
+python ov_infer.py \
+    --image_path layout.jpg \
+    --precision fp16 \
+    --device GPU
+
+# Use combined FP32 model (merged output nodes)
+python ov_infer.py \
+    --image_path layout.jpg \
+    --precision combined_fp32
 ```
 
 #### Combine batch size and boxes node for PP-DocLayoutV2
@@ -79,11 +145,13 @@ To handle output easily, you can use `combine_bs_and_boxes_node.py` to combine b
 
 | Parameter | Type | Required | Default | Description |
 |-----------|------|----------|---------|-------------|
-| `--model_path` | str | ✅ | - | OpenVINO IR model path (.xml file) |
+| `--model_path` | str | ❌ | `None` | OpenVINO IR model path (.xml file). If not specified or `None`, automatically downloads from ModelScope. **Note:** If a specific `.xml` file path is provided, the `--precision` parameter will be ignored |
 | `--image_path` | str | ✅ | - | Input image path |
 | `--output_dir` | str | ❌ | `./output_ov` | Output directory |
 | `--device` | str | ❌ | `GPU` | Inference device: `CPU`, `GPU`, `NPU`, `AUTO` |
 | `--threshold` | float | ❌ | `0.5` | Detection confidence threshold |
+| `--precision` | str | ❌ | `fp32` | Model precision: `fp16`, `fp32`, `combined_fp16`, `combined_fp32`. **Note:** Only effective when `--model_path` is not specified (auto-download) or points to a directory. If `--model_path` points to a specific `.xml` file, this parameter will be ignored |
+| `--cache_dir` | str | ❌ | `None` | ModelScope model cache directory. Uses default cache directory if not specified |
 
 ## 📊 Supported Layout Elements
 
@@ -157,12 +225,24 @@ This project provides `paddle_infer.py` as a reference implementation using Padd
 ```python
 from ov_infer import paddle_ov_doclayout
 
+# Using local model file
 result = paddle_ov_doclayout(
     model_path="pp_doclayoutv2.xml",
     image_path="layout.jpg",
     output_dir="./output",
     device="GPU",
     threshold=0.5
+)
+
+# Auto-download model (set model_path to None)
+result = paddle_ov_doclayout(
+    model_path=None,  # Automatically downloads from ModelScope
+    image_path="layout.jpg",
+    output_dir="./output",
+    device="GPU",
+    threshold=0.5,
+    precision="fp16",  # Use FP16 model
+    cache_dir="./models_cache"  # Optional: specify cache directory
 )
 
 print(f"Detected {len(result.boxes)} layout elements")
